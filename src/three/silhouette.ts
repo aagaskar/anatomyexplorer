@@ -64,9 +64,7 @@ function specGeometry(spec: SegmentSpec): BufferGeometry | null {
   return null;
 }
 
-export function buildSilhouette(nodes: Record<string, Object3D>): { group: Object3D; meshes: Mesh[] } {
-  const group = new Object3D();
-  group.name = 'silhouette';
+export function buildSilhouette(nodes: Record<string, Object3D>): Mesh[] {
   const material = new MeshStandardMaterial({
     color: '#c9a48c',
     roughness: 0.86,
@@ -94,5 +92,5 @@ export function buildSilhouette(nodes: Record<string, Object3D>): { group: Objec
     parent.add(mesh);
     meshes.push(mesh);
   }
-  return { group, meshes };
+  return meshes;
 }

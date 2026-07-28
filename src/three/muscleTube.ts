@@ -64,8 +64,9 @@ export class MuscleTube {
 
     for (let i = 0; i < rings; i++) {
       const t = i / this.tubular;
-      // Tendon at both ends, muscle belly in the middle.
-      const fleshiness = Math.pow(Math.sin(Math.PI * t), 0.45);
+      // Tendon at both ends, belly through the middle. The ramp is deliberately steep so
+      // short muscles still read as muscle rather than washing out to tendon white.
+      const fleshiness = Math.min(1, Math.sin(Math.PI * t) * 2.4);
       mix.copy(tendon).lerp(belly, fleshiness);
       for (let j = 0; j < perRing; j++) {
         const k = i * perRing + j;

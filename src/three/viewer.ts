@@ -100,9 +100,9 @@ interface Entry {
 function bellyColorFor(group: string): Color {
   let hash = 0;
   for (let i = 0; i < group.length; i++) hash = (hash * 31 + group.charCodeAt(i)) % 100000;
-  const hue = 0.018 + ((hash % 100) / 100) * 0.03;
-  const lightness = 0.36 + (((hash >> 7) % 100) / 100) * 0.1;
-  return new Color().setHSL(hue, 0.56, lightness);
+  const hue = 0.015 + ((hash % 100) / 100) * 0.028;
+  const lightness = 0.29 + (((hash >> 7) % 100) / 100) * 0.09;
+  return new Color().setHSL(hue, 0.64, lightness);
 }
 
 const COLORS = {
@@ -169,7 +169,7 @@ export class AnatomyViewer {
     this.renderer = new WebGLRenderer({ canvas, antialias: true, alpha: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping = ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.toneMappingExposure = 0.92;
 
     this.scene.background = new Color('#0d1015');
 
@@ -196,8 +196,7 @@ export class AnatomyViewer {
     this.buildJoints();
     this.buildMuscles();
     this.buildNerves();
-    const silhouette = buildSilhouette(this.rig.nodes);
-    this.silhouetteMeshes = silhouette.meshes;
+    this.silhouetteMeshes = buildSilhouette(this.rig.nodes);
 
     this.applyPose();
     this.applyLayers();
@@ -216,18 +215,18 @@ export class AnatomyViewer {
   // ------------------------------------------------------------------ scene setup
 
   private setupLights(): void {
-    this.scene.add(new HemisphereLight('#cfe4ff', '#26211c', 0.85));
-    this.scene.add(new AmbientLight('#ffffff', 0.18));
+    this.scene.add(new HemisphereLight('#cfe4ff', '#26211c', 0.55));
+    this.scene.add(new AmbientLight('#ffffff', 0.13));
 
-    const key = new DirectionalLight('#fff2e0', 2.1);
+    const key = new DirectionalLight('#fff2e0', 1.5);
     key.position.set(2.2, 3.4, 2.6);
     this.scene.add(key);
 
-    const fill = new DirectionalLight('#9fc4ff', 0.7);
+    const fill = new DirectionalLight('#9fc4ff', 0.48);
     fill.position.set(-2.6, 1.4, 1.2);
     this.scene.add(fill);
 
-    const rim = new DirectionalLight('#ffd9b0', 0.9);
+    const rim = new DirectionalLight('#ffd9b0', 0.6);
     rim.position.set(-0.6, 1.8, -3);
     this.scene.add(rim);
   }
@@ -472,7 +471,8 @@ export class AnatomyViewer {
     this.canvas.removeEventListener('pointerleave', this.onPointerLeave);
     for (const entry of this.entries.values()) {
       entry.material.dispose();
-      entry.tube ? entry.tube.dispose() : entry.mesh.geometry.dispose();
+      if (entry.tube) entry.tube.dispose();
+      else entry.mesh.geometry.dispose();
     }
     this.controls.dispose();
     this.renderer.dispose();
