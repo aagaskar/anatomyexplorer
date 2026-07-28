@@ -466,7 +466,7 @@ const CENTER_BONES: BoneDef[] = [
     side: 'center',
     region: 'Head',
     boneClass: 'flat',
-    shape: { kind: 'skull', center: [0, 0.048, 0.006], radius: 0.079 },
+    shape: { kind: 'skull', center: [0, 0.052, -0.002], radius: 0.079 },
     landmarks: [
       'Frontal, parietal, temporal and occipital bones',
       'External occipital protuberance',
@@ -489,7 +489,7 @@ const CENTER_BONES: BoneDef[] = [
     side: 'center',
     region: 'Head',
     boneClass: 'irregular',
-    shape: { kind: 'mandible', center: [0, -0.018, 0.004], width: 0.098, height: 0.062, depth: 0.078 },
+    shape: { kind: 'mandible', center: [0, -0.018, 0.004], width: 0.1, height: 0.062, depth: 0.078 },
     landmarks: ['Body', 'Ramus', 'Angle', 'Condylar process', 'Coronoid process', 'Mental protuberance'],
     articulations: ['temporomandibular'],
     notes:

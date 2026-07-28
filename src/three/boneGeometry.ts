@@ -221,67 +221,232 @@ function ribcage(s: Extract<BoneShape, { kind: 'ribcage' }>): BufferGeometry {
   return mergeParts(parts);
 }
 
+/**
+ * Skull, built as a braincase plus a facial skeleton.
+ *
+ * The orbits and the nasal aperture are *gaps*, not carved cavities: additive geometry
+ * cannot subtract, so the orbital rims (brow bar, lateral and infraorbital margins, nasal
+ * bones) are modelled as ridges projecting ~2 cm forward of the braincase, and the space
+ * they enclose falls back to the braincase surface behind. That recess plus self-shadowing
+ * is what reads as an eye socket.
+ *
+ * Offsets are in metres from the braincase centre, scaled by `radius` so the whole skull
+ * stays parametric.
+ */
 function skull(s: Extract<BoneShape, { kind: 'skull' }>): BufferGeometry {
   const c = v3(s.center);
-  const parts = [
-    translate(scale(new SphereGeometry(s.radius, 24, 18), 0.86, 1.02, 1.06), c.x, c.y, c.z),
-    // Face / maxilla block.
-    translate(
-      scale(new SphereGeometry(s.radius * 0.62, 16, 12), 0.86, 0.72, 0.78),
-      c.x,
-      c.y - s.radius * 0.62,
-      c.z + s.radius * 0.42,
+  const k = s.radius / 0.079;
+  const at = (x: number, y: number, z: number) =>
+    new Vector3(c.x + x * k, c.y + y * k, c.z + z * k);
+  const blob = (x: number, y: number, z: number, rx: number, ry: number, rz: number, detail = 16) => {
+    const p = at(x, y, z);
+    return translate(scale(new SphereGeometry(1, detail, Math.round(detail * 0.75)), rx * k, ry * k, rz * k), p.x, p.y, p.z);
+  };
+  const ridge = (points: [number, number, number][], radius: number, segments = 20) =>
+    sweptTube(
+      new CatmullRomCurve3(points.map(([x, y, z]) => at(x, y, z)), false, 'catmullrom', 0.4),
+      () => radius * k,
+      segments,
+      8,
+    );
+
+  const parts: BufferGeometry[] = [
+    // Braincase, forehead and occiput. A skull in profile is longer front-to-back than it
+    // is tall, so the vault is an elongated ellipsoid rather than a sphere. It is also set
+    // back at face level: the orbital rims in front of it create the depth of the sockets.
+    blob(0, 0.006, -0.026, 0.067, 0.066, 0.076, 26),
+    blob(0, 0.04, 0.008, 0.056, 0.036, 0.046, 20),
+    blob(0, -0.018, -0.07, 0.044, 0.038, 0.024, 16),
+    // Supraorbital margins: an arch over each orbit, dipping at the glabella between them.
+    ridge(
+      [
+        [-0.062, 0.0, 0.03],
+        [-0.04, 0.016, 0.054],
+        [-0.016, 0.02, 0.068],
+        [0, 0.012, 0.072],
+        [0.016, 0.02, 0.068],
+        [0.04, 0.016, 0.054],
+        [0.062, 0.0, 0.03],
+      ],
+      0.007,
+      32,
+    ),
+    // Nasal bones and the bridge of the nose. The piriform aperture is the gap below them,
+    // closed at the bottom by the anterior nasal spine.
+    ridge(
+      [
+        [0, 0.014, 0.068],
+        [0, -0.008, 0.076],
+        [0, -0.028, 0.078],
+      ],
+      0.006,
+      12,
+    ),
+    ridge(
+      [
+        [-0.012, -0.07, 0.062],
+        [0, -0.066, 0.072],
+        [0.012, -0.07, 0.062],
+      ],
+      0.005,
+      10,
+    ),
+    // Upper dental arch.
+    ridge(
+      [
+        [-0.031, -0.084, 0.028],
+        [-0.023, -0.088, 0.054],
+        [0, -0.09, 0.066],
+        [0.023, -0.088, 0.054],
+        [0.031, -0.084, 0.028],
+      ],
+      0.0065,
+      22,
+    ),
+    // External occipital protuberance and nuchal line — where trapezius and the deep neck
+    // extensors take hold.
+    ridge(
+      [
+        [-0.044, -0.022, -0.078],
+        [0, -0.014, -0.09],
+        [0.044, -0.022, -0.078],
+      ],
+      0.006,
+      14,
     ),
   ];
-  // Mastoid processes and zygomatic arches.
+
   for (const side of [-1, 1]) {
+    // Lateral orbital margin sweeping down from the brow to the cheek.
     parts.push(
-      translate(
-        scale(new SphereGeometry(s.radius * 0.2, 10, 8), 1, 1.4, 1),
-        c.x + side * s.radius * 0.62,
-        c.y - s.radius * 0.78,
-        c.z - s.radius * 0.3,
+      ridge(
+        [
+          [side * 0.062, 0.0, 0.03],
+          [side * 0.06, -0.018, 0.046],
+          [side * 0.05, -0.032, 0.056],
+        ],
+        0.0055,
+        12,
       ),
     );
+    // Infraorbital margin closing the bottom of the orbit.
     parts.push(
-      translate(
-        new BoxGeometry(s.radius * 0.1, s.radius * 0.12, s.radius * 0.8),
-        c.x + side * s.radius * 0.78,
-        c.y - s.radius * 0.28,
-        c.z + s.radius * 0.12,
+      ridge(
+        [
+          [side * 0.05, -0.032, 0.056],
+          [side * 0.03, -0.038, 0.068],
+          [side * 0.013, -0.03, 0.07],
+        ],
+        0.0055,
+        12,
       ),
     );
+    // Zygomatic arch running back to the ear — the origin of masseter.
+    parts.push(
+      ridge(
+        [
+          [side * 0.048, -0.03, 0.05],
+          [side * 0.063, -0.032, 0.012],
+          [side * 0.058, -0.024, -0.03],
+        ],
+        0.006,
+        14,
+      ),
+    );
+    // Maxilla. The pair is held apart at the midline, and that gap is the nasal aperture.
+    parts.push(blob(side * 0.024, -0.058, 0.046, 0.02, 0.024, 0.015, 14));
+    // Mastoid process, behind and below the ear.
+    parts.push(blob(side * 0.05, -0.07, -0.04, 0.013, 0.021, 0.014, 12));
   }
+
   return mergeParts(parts);
 }
 
+/**
+ * Mandible: a U-shaped body carrying the lower dental arch, with a ramus rising on each
+ * side to the condyle (the temporomandibular joint) and the coronoid process in front of it.
+ */
 function mandible(s: Extract<BoneShape, { kind: 'mandible' }>): BufferGeometry {
   const c = v3(s.center);
-  const w = s.width / 2;
-  const parts: BufferGeometry[] = [];
-  const body = new CatmullRomCurve3(
-    [
-      new Vector3(c.x - w, c.y + s.height * 0.5, c.z - s.depth * 0.42),
-      new Vector3(c.x - w * 0.85, c.y - s.height * 0.2, c.z + s.depth * 0.1),
-      new Vector3(c.x, c.y - s.height * 0.34, c.z + s.depth * 0.5),
-      new Vector3(c.x + w * 0.85, c.y - s.height * 0.2, c.z + s.depth * 0.1),
-      new Vector3(c.x + w, c.y + s.height * 0.5, c.z - s.depth * 0.42),
-    ],
-    false,
-    'catmullrom',
-    0.4,
-  );
-  parts.push(sweptTube(body, () => 0.009, 28, 8));
+  const sx = s.width / 0.098;
+  const sy = s.height / 0.062;
+  const sz = s.depth / 0.078;
+  const at = (x: number, y: number, z: number) =>
+    new Vector3(c.x + x * sx, c.y + y * sy, c.z + z * sz);
+  const ridge = (points: [number, number, number][], radius: number, segments = 20) =>
+    sweptTube(
+      new CatmullRomCurve3(points.map(([x, y, z]) => at(x, y, z)), false, 'catmullrom', 0.4),
+      () => radius,
+      segments,
+      8,
+    );
+
+  const parts: BufferGeometry[] = [
+    // Lower border of the body, from angle to angle around the chin.
+    ridge(
+      [
+        [-0.049, -0.014, -0.052],
+        [-0.042, -0.02, 0.006],
+        [0, -0.024, 0.032],
+        [0.042, -0.02, 0.006],
+        [0.049, -0.014, -0.052],
+      ],
+      0.009,
+      30,
+    ),
+    // Lower dental arch, meeting the upper teeth.
+    ridge(
+      [
+        [-0.032, 0.018, -0.02],
+        [-0.024, 0.014, 0.018],
+        [0, 0.012, 0.03],
+        [0.024, 0.014, 0.018],
+        [0.032, 0.018, -0.02],
+      ],
+      0.006,
+      26,
+    ),
+    // Mental protuberance — the chin. Kept low and shallow so it reads as part of the body
+    // of the mandible rather than a bead stuck on the front.
+    translate(
+      scale(new SphereGeometry(1, 14, 10), 0.016 * sx, 0.011 * sy, 0.007 * sz),
+      at(0, -0.016, 0.026).x,
+      at(0, -0.016, 0.026).y,
+      at(0, -0.016, 0.026).z,
+    ),
+  ];
+
   for (const side of [-1, 1]) {
+    // Ramus, from the angle up to the condyle.
     parts.push(
-      translate(
-        new BoxGeometry(0.008, s.height * 0.55, 0.012),
-        c.x + side * w,
-        c.y + s.height * 0.72,
-        c.z - s.depth * 0.44,
+      ridge(
+        [
+          [side * 0.049, -0.014, -0.052],
+          [side * 0.05, 0.014, -0.05],
+          [side * 0.05, 0.044, -0.042],
+        ],
+        0.008,
+        12,
+      ),
+    );
+    // Condyle (the joint surface) and the coronoid process in front of it.
+    const condyle = at(side * 0.05, 0.046, -0.042);
+    parts.push(
+      translate(scale(new SphereGeometry(1, 12, 10), 0.012, 0.008, 0.009), condyle.x, condyle.y, condyle.z),
+    );
+    parts.push(
+      ridge(
+        [
+          [side * 0.05, 0.02, -0.048],
+          [side * 0.045, 0.036, -0.026],
+          [side * 0.04, 0.042, -0.01],
+        ],
+        0.005,
+        10,
       ),
     );
   }
+
   return mergeParts(parts);
 }
 

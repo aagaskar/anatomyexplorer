@@ -23,6 +23,7 @@ import {
   Mesh,
   MeshStandardMaterial,
   Object3D,
+  PCFSoftShadowMap,
   PerspectiveCamera,
   Plane,
   Quaternion,
@@ -106,13 +107,13 @@ function bellyColorFor(group: string): Color {
 }
 
 const COLORS = {
-  bone: new Color('#ded6c4'),
+  bone: new Color('#cdc2a8'),
   muscleHighlight: new Color('#ff7a4d'),
-  joint: new Color('#59c2e8'),
-  nerve: new Color('#f2d24b'),
-  select: new Color('#ffb648'),
-  search: new Color('#4fd6b0'),
-  hover: new Color('#ffffff'),
+  joint: new Color('#2f9fce'),
+  nerve: new Color('#c9a227'),
+  select: new Color('#e8891c'),
+  search: new Color('#12a37c'),
+  hover: new Color('#5b7183'),
 };
 
 export class AnatomyViewer {
@@ -169,9 +170,11 @@ export class AnatomyViewer {
     this.renderer = new WebGLRenderer({ canvas, antialias: true, alpha: false });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping = ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.92;
+    this.renderer.toneMappingExposure = 1;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = PCFSoftShadowMap;
 
-    this.scene.background = new Color('#0d1015');
+    this.scene.background = new Color('#ffffff');
 
     this.camera = new PerspectiveCamera(34, 1, 0.05, 60);
     this.camera.position.set(0.95, 1.15, 3.1);
@@ -215,18 +218,31 @@ export class AnatomyViewer {
   // ------------------------------------------------------------------ scene setup
 
   private setupLights(): void {
-    this.scene.add(new HemisphereLight('#cfe4ff', '#26211c', 0.55));
-    this.scene.add(new AmbientLight('#ffffff', 0.13));
+    // A white backdrop bounces a lot of light, so the ambient terms carry more of the load
+    // and the key light is mostly there to shape the form and cast the contact shadow.
+    this.scene.add(new HemisphereLight('#ffffff', '#c2c8d0', 0.72));
+    this.scene.add(new AmbientLight('#ffffff', 0.2));
 
-    const key = new DirectionalLight('#fff2e0', 1.5);
-    key.position.set(2.2, 3.4, 2.6);
-    this.scene.add(key);
+    const key = new DirectionalLight('#fff6ea', 1.75);
+    key.position.set(1.4, 4.4, 1.9);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.camera.near = 0.5;
+    key.shadow.camera.far = 8;
+    key.shadow.camera.left = -1.2;
+    key.shadow.camera.right = 1.2;
+    key.shadow.camera.top = 1.6;
+    key.shadow.camera.bottom = -1.2;
+    key.shadow.bias = -0.0006;
+    key.shadow.normalBias = 0.012;
+    key.target.position.set(0, 0.9, 0);
+    this.scene.add(key, key.target);
 
-    const fill = new DirectionalLight('#9fc4ff', 0.48);
+    const fill = new DirectionalLight('#dce7f5', 0.55);
     fill.position.set(-2.6, 1.4, 1.2);
     this.scene.add(fill);
 
-    const rim = new DirectionalLight('#ffd9b0', 0.6);
+    const rim = new DirectionalLight('#ffe8cf', 0.45);
     rim.position.set(-0.6, 1.8, -3);
     this.scene.add(rim);
   }
@@ -234,16 +250,17 @@ export class AnatomyViewer {
   private setupGround(): void {
     const disc = new Mesh(
       new CircleGeometry(2.4, 64),
-      new MeshStandardMaterial({ color: '#151a21', roughness: 1, metalness: 0, side: DoubleSide }),
+      new MeshStandardMaterial({ color: '#ffffff', roughness: 1, metalness: 0, side: DoubleSide }),
     );
     disc.rotation.x = -Math.PI / 2;
     disc.position.y = -0.002;
+    disc.receiveShadow = true;
     this.scene.add(disc);
 
-    const grid = new GridHelper(4.8, 24, '#2a3340', '#1c232c');
+    const grid = new GridHelper(4.8, 24, '#ced6e0', '#e8ecf1');
     const gridMaterial = grid.material as LineBasicMaterial;
     gridMaterial.transparent = true;
-    gridMaterial.opacity = 0.5;
+    gridMaterial.opacity = 0.55;
     this.scene.add(grid);
   }
 
@@ -273,6 +290,8 @@ export class AnatomyViewer {
       });
       const mesh = new Mesh(geometry, material);
       mesh.renderOrder = 1;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
       parent.add(mesh);
       this.register({
         ref: { kind: 'bone', id: bone.id },
@@ -336,6 +355,8 @@ export class AnatomyViewer {
     });
     const mesh = new Mesh(tube.geometry, material);
     mesh.renderOrder = isNerve ? 4 : 2;
+    mesh.castShadow = !isNerve;
+    mesh.receiveShadow = true;
     return {
       ref: { kind: isNerve ? 'nerve' : 'muscle', id: def.id },
       mesh,
@@ -524,22 +545,30 @@ export class AnatomyViewer {
       const isHovered = this.hovered === key;
       const material = entry.material;
 
-      let emissive = 0;
-      let emissiveColor = COLORS.select;
+      // Highlighting tints the base colour rather than relying on emissive alone. Emissive
+      // adds light, which is invisible against a white backdrop — recolouring is not.
       // Search hits win over selection: picking a "hip abduction" result selects the whole
       // set, and it should read as one green group rather than a mix of green and amber.
+      let tint: Color | null = null;
+      let strength = 0;
       if (isHit) {
-        emissive = 0.8;
-        emissiveColor = COLORS.search;
+        tint = COLORS.search;
+        strength = 0.88;
       } else if (isSelected) {
-        emissive = 0.85;
-        emissiveColor = COLORS.select;
+        tint = COLORS.select;
+        strength = 0.9;
       } else if (isHovered) {
-        emissive = 0.4;
-        emissiveColor = COLORS.hover;
+        tint = COLORS.hover;
+        strength = 0.45;
       }
 
-      material.emissive.copy(emissiveColor).multiplyScalar(emissive);
+      if (tint) {
+        material.color.copy(entry.baseColor).lerp(tint, strength);
+        material.emissive.copy(tint).multiplyScalar(0.16);
+      } else {
+        material.color.copy(entry.baseColor);
+        material.emissive.setScalar(0);
+      }
       material.emissiveIntensity = 1;
 
       let opacity = entry.baseOpacity;
